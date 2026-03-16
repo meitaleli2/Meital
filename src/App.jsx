@@ -3,6 +3,7 @@ import HubScreen from './components/HubScreen'
 import AdminLogin from './components/AdminLogin'
 import AdminDashboard from './components/AdminDashboard'
 import ShemEzemGame from './games/ShemEzem/ShemEzemGame'
+import MultiplicationWarGame from './games/MultiplicationWar/MultiplicationWarGame'
 
 const isAdminRoute = () =>
   typeof window !== 'undefined' && window.location.search.includes('admin')
@@ -20,6 +21,7 @@ export default function App() {
 
   const handleSelectGame = (gameId) => {
     if (gameId === 'shem-ezem') setView(VIEWS.GAME_SHEM_EZEM)
+    if (gameId === 'multiplication-war') setView('multiplication-war')
   }
 
   const handleAdminLogin = () => {
@@ -46,6 +48,7 @@ export default function App() {
   if (view === VIEWS.ADMIN_LOGIN) return <AdminLogin onLogin={handleAdminLogin} />
   if (view === VIEWS.ADMIN_DASHBOARD && adminAuthed) return <AdminDashboard onLogout={handleAdminLogout} />
   if (view === VIEWS.GAME_SHEM_EZEM) return <ShemEzemGame onBack={() => setView(VIEWS.HUB)} />
+  if (view === 'multiplication-war') return <MultiplicationWarGame onBack={() => setView(VIEWS.HUB)} />
 
   return (
     <div className="hub-wrapper">
