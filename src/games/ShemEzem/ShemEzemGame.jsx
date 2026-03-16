@@ -5,6 +5,7 @@ import StageIntro from './components/StageIntro'
 import QuestionScreen from './components/QuestionScreen'
 import StageComplete from './components/StageComplete'
 import GameComplete from './components/GameComplete'
+import { createSession, updateSession } from '../../supabase'
 
 const SCREENS = {
   WELCOME: 'welcome',
@@ -23,9 +24,7 @@ function shuffle(arr) {
   return a
 }
 
-// onBack: called when player goes back to hub (mid-game or after welcome)
-// onSessionEnd: called with { playerName, score, stagesCompleted, completed }
-export default function ShemEzemGame({ onBack, onSessionEnd }) {
+export default function ShemEzemGame({ onBack }) {
   const [screen, setScreen] = useState(SCREENS.WELCOME)
   const [playerName, setPlayerName] = useState('')
   const [currentStageIndex, setCurrentStageIndex] = useState(0)
@@ -36,7 +35,6 @@ export default function ShemEzemGame({ onBack, onSessionEnd }) {
   const [correctInStage, setCorrectInStage] = useState(0)
   const [totalInStage, setTotalInStage] = useState(0)
   const [stageStars, setStageStars] = useState([])
-
   const [questionPool, setQuestionPool] = useState([])
   const [queueIndex, setQueueIndex] = useState(0)
 
@@ -45,13 +43,17 @@ export default function ShemEzemGame({ onBack, onSessionEnd }) {
   const totalScoreRef = useRef(0)
   const stagesCompletedRef = useRef(0)
   const playerNameRef = useRef('')
+  const sessionIdRef = useRef(null)  // Supabase session id
 
   const currentStage = stages[currentStageIndex]
   const currentQuestion = questionPool[queueIndex]
 
-  const handleStartGame = (name) => {
+  const handleStartGame = async (name) => {
     setPlayerName(name)
     playerNameRef.current = name
+    // Create DB session immediately
+    const id = await createSession({ playerName: name, gameId: 'shem-ezem', gameName: 'גיבורי השפה' })
+    sessionIdRef.current = id
     initStage(0)
     setScreen(SCREENS.INTRO)
   }
@@ -67,9 +69,7 @@ export default function ShemEzemGame({ onBack, onSessionEnd }) {
     totalInStageRef.current = 0
   }
 
-  const handleStartStage = () => {
-    setScreen(SCREENS.PLAYING)
-  }
+  const handleStartStage = () => setScreen(SCREENS.PLAYING)
 
   const handleAnswer = (isCorrect, points) => {
     totalInStageRef.current += 1
@@ -85,6 +85,12 @@ export default function ShemEzemGame({ onBack, onSessionEnd }) {
       setStreak(newStreak)
       setMaxStreak(prev => Math.max(prev, newStreak))
       setCorrectInStage(c => c + 1)
+      // Update DB score in real-time after every correct answer
+      updateSession(sessionIdRef.current, {
+        score: newTotalScore,
+        stagesCompleted: stagesCompletedRef.current,
+        completed: false,
+      })
     } else {
       setStreak(0)
     }
@@ -96,13 +102,18 @@ export default function ShemEzemGame({ onBack, onSessionEnd }) {
       const stars = attempts <= 5 ? 3 : attempts <= 7 ? 2 : 1
       setStageStars(prev => [...prev, stars])
       stagesCompletedRef.current += 1
+      // Update DB after stage complete
+      updateSession(sessionIdRef.current, {
+        score: totalScoreRef.current,
+        stagesCompleted: stagesCompletedRef.current,
+        completed: false,
+      })
       setScreen(SCREENS.STAGE_COMPLETE)
       return
     }
     let nextIdx = queueIndex + 1
     if (nextIdx >= questionPool.length) {
-      const reshuffled = shuffle([...stages[currentStageIndex].questions])
-      setQuestionPool(reshuffled)
+      setQuestionPool(shuffle([...stages[currentStageIndex].questions]))
       setQueueIndex(0)
     } else {
       setQueueIndex(nextIdx)
@@ -112,9 +123,8 @@ export default function ShemEzemGame({ onBack, onSessionEnd }) {
   const handleNextStage = () => {
     const nextStageIndex = currentStageIndex + 1
     if (nextStageIndex >= stages.length) {
-      // Game complete — save session
-      onSessionEnd({
-        playerName: playerNameRef.current,
+      // Game complete
+      updateSession(sessionIdRef.current, {
         score: totalScoreRef.current,
         stagesCompleted: stagesCompletedRef.current,
         completed: true,
@@ -142,28 +152,18 @@ export default function ShemEzemGame({ onBack, onSessionEnd }) {
     stageScoreRef.current = 0
     totalScoreRef.current = 0
     stagesCompletedRef.current = 0
+    sessionIdRef.current = null
   }
 
-  // Back button: save partial session then return to hub
   const handleBack = () => {
-    if (playerNameRef.current) {
-      onSessionEnd({
-        playerName: playerNameRef.current,
-        score: totalScoreRef.current,
-        stagesCompleted: stagesCompletedRef.current,
-        completed: false,
-      })
-    }
+    // Mark current session as not completed (already updated in real-time)
     onBack()
   }
 
   return (
     <div className="app-root">
-      {/* Back to hub button (shown during gameplay) */}
       {screen !== SCREENS.WELCOME && screen !== SCREENS.GAME_COMPLETE && (
-        <button className="btn-back-hub" onClick={handleBack} title="חֲזוֹר לַדַּף הָרָאשִׁי">
-          ← דַּף רָאשִׁי
-        </button>
+        <button className="btn-back-hub" onClick={handleBack}>← דַּף רָאשִׁי</button>
       )}
 
       {screen === SCREENS.WELCOME && (

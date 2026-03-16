@@ -9,10 +9,16 @@ export default function AdminDashboard({ onLogout }) {
   const [sortDir, setSortDir] = useState('desc')
   const [filter, setFilter] = useState('')
 
-  useEffect(() => {
+  const load = () => {
     fetchAllSessions()
       .then(data => { setSessions(data); setLoading(false) })
       .catch(() => { setError('שְׁגִיאָה בְּטְעִינַת הַנְּתוּנִים'); setLoading(false) })
+  }
+
+  useEffect(() => {
+    load()
+    const interval = setInterval(load, 30000) // auto-refresh every 30s
+    return () => clearInterval(interval)
   }, [])
 
   const handleSort = (field) => {

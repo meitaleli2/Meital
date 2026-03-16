@@ -1,65 +1,37 @@
 import { createClient } from '@supabase/supabase-js'
 
-// ─── Supabase configuration ───────────────────────────────────────────────────
-// After creating your Supabase project at https://supabase.com, replace these:
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://YOUR_PROJECT.supabase.co'
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'YOUR_ANON_KEY'
+const SUPABASE_URL = 'https://hzlzltjcdrxyqvogkbms.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6bHpsdGpjZHJ4eXF2b2drYm1zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NTEwNzQsImV4cCI6MjA4OTIyNzA3NH0.m85j9UJ_MGZ6t6ijKfECdkaHabvHyiRHd0xGn8EkVtw'
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-// ─── SQL to run once in Supabase SQL editor ───────────────────────────────────
-/*
-CREATE TABLE game_sessions (
-  id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  player_name text NOT NULL,
-  game_id     text NOT NULL,
-  game_name   text NOT NULL,
-  score       int  NOT NULL DEFAULT 0,
-  stages_completed int NOT NULL DEFAULT 0,
-  completed   boolean NOT NULL DEFAULT false,
-  created_at  timestamptz DEFAULT now()
-);
-
--- Enable Row Level Security
-ALTER TABLE game_sessions ENABLE ROW LEVEL SECURITY;
-
--- Allow anyone to INSERT (players save their scores)
-CREATE POLICY "allow_insert" ON game_sessions
-  FOR INSERT WITH CHECK (true);
-
--- Block all SELECT/UPDATE/DELETE from anonymous users
--- (Admin reads via service role key or bypasses RLS with a function)
-CREATE POLICY "block_select" ON game_sessions
-  FOR SELECT USING (false);
-*/
-
-// ─── Save a game session (called when player finishes or quits) ────────────────
-export async function saveSession({ playerName, gameId, gameName, score, stagesCompleted, completed }) {
-  const { error } = await supabase.from('game_sessions').insert({
-    player_name: playerName,
-    game_id: gameId,
-    game_name: gameName,
-    score,
-    stages_completed: stagesCompleted,
-    completed,
-  })
-  if (error) console.error('Supabase insert error:', error)
+// Create a session when the player starts — returns the session id
+export async function createSession({ playerName, gameId, gameName }) {
+  const { data, error } = await supabase
+    .from('game_sessions')
+    .insert({ player_name: playerName, game_id: gameId, game_name: gameName, score: 0, stages_completed: 0, completed: false })
+    .select('id')
+    .single()
+  if (error) { console.error('createSession error:', error); return null }
+  return data.id
 }
 
-// ─── Admin: fetch all sessions (uses service role key via Vercel env) ──────────
+// Update score + stages in real-time as the player progresses
+export async function updateSession(sessionId, { score, stagesCompleted, completed }) {
+  if (!sessionId) return
+  const { error } = await supabase
+    .from('game_sessions')
+    .update({ score, stages_completed: stagesCompleted, completed, updated_at: new Date().toISOString() })
+    .eq('id', sessionId)
+  if (error) console.error('updateSession error:', error)
+}
+
+// Admin: fetch all sessions ordered by newest first
 export async function fetchAllSessions() {
-  // We use a Postgres function that bypasses RLS so the anon key can read
-  // Run this once in Supabase SQL editor:
-  /*
-  CREATE OR REPLACE FUNCTION get_all_sessions()
-  RETURNS SETOF game_sessions
-  LANGUAGE sql SECURITY DEFINER
-  AS $$ SELECT * FROM game_sessions ORDER BY created_at DESC; $$;
-  */
-  const { data, error } = await supabase.rpc('get_all_sessions')
-  if (error) {
-    console.error('Supabase fetch error:', error)
-    return []
-  }
+  const { data, error } = await supabase
+    .from('game_sessions')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) { console.error('fetchAllSessions error:', error); return [] }
   return data || []
 }

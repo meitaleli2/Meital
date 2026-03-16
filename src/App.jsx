@@ -3,9 +3,7 @@ import HubScreen from './components/HubScreen'
 import AdminLogin from './components/AdminLogin'
 import AdminDashboard from './components/AdminDashboard'
 import ShemEzemGame from './games/ShemEzem/ShemEzemGame'
-import { saveSession } from './supabase'
 
-// Navigate to ?admin to open the admin panel (no visible link in UI)
 const isAdminRoute = () =>
   typeof window !== 'undefined' && window.location.search.includes('admin')
 
@@ -24,21 +22,6 @@ export default function App() {
     if (gameId === 'shem-ezem') setView(VIEWS.GAME_SHEM_EZEM)
   }
 
-  const handleSessionEnd = async (sessionData) => {
-    try {
-      await saveSession({
-        playerName: sessionData.playerName,
-        gameId: 'shem-ezem',
-        gameName: 'גִּבּוֹרֵי הַשָּׂפָה',
-        score: sessionData.score,
-        stagesCompleted: sessionData.stagesCompleted,
-        completed: sessionData.completed,
-      })
-    } catch (e) {
-      console.error('Failed to save session:', e)
-    }
-  }
-
   const handleAdminLogin = () => {
     setAdminAuthed(true)
     setView(VIEWS.ADMIN_DASHBOARD)
@@ -47,46 +30,27 @@ export default function App() {
   const handleAdminLogout = () => {
     setAdminAuthed(false)
     setView(VIEWS.HUB)
-    // Clear ?admin from URL
     window.history.replaceState({}, '', window.location.pathname)
   }
 
-  // Secret admin access: triple-click the footer or navigate to ?admin
   const handleFooterClick = (() => {
-    let clicks = 0
-    let timer = null
+    let clicks = 0, timer = null
     return () => {
       clicks++
       clearTimeout(timer)
       timer = setTimeout(() => { clicks = 0 }, 700)
-      if (clicks >= 3) {
-        clicks = 0
-        setView(VIEWS.ADMIN_LOGIN)
-      }
+      if (clicks >= 3) { clicks = 0; setView(VIEWS.ADMIN_LOGIN) }
     }
   })()
 
-  if (view === VIEWS.ADMIN_LOGIN) {
-    return <AdminLogin onLogin={handleAdminLogin} />
-  }
-
-  if (view === VIEWS.ADMIN_DASHBOARD && adminAuthed) {
-    return <AdminDashboard onLogout={handleAdminLogout} />
-  }
-
-  if (view === VIEWS.GAME_SHEM_EZEM) {
-    return (
-      <ShemEzemGame
-        onBack={() => setView(VIEWS.HUB)}
-        onSessionEnd={handleSessionEnd}
-      />
-    )
-  }
+  if (view === VIEWS.ADMIN_LOGIN) return <AdminLogin onLogin={handleAdminLogin} />
+  if (view === VIEWS.ADMIN_DASHBOARD && adminAuthed) return <AdminDashboard onLogout={handleAdminLogout} />
+  if (view === VIEWS.GAME_SHEM_EZEM) return <ShemEzemGame onBack={() => setView(VIEWS.HUB)} />
 
   return (
     <div className="hub-wrapper">
       <HubScreen onSelectGame={handleSelectGame} />
-      <div className="hub-admin-trigger" onClick={handleFooterClick} title="" />
+      <div className="hub-admin-trigger" onClick={handleFooterClick} />
     </div>
   )
 }
